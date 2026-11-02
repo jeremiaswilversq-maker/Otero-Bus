@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otero Bus - Entre Ríos</title>
+    <meta name="theme-color" content="#0b1325">
+    <meta name="description" content="Consulta de horarios, recorridos y tarifas de Colectivos Otero (Colón, San José, El Brillante, El Colorado, Liebig).">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    
+    <!-- Leaflet CSS for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <style>
+        :root {
+            --bg-dark: #090e17;
+            --bg-card: #131c2e;
+            --bg-card-hover: #1c2a44;
+            --primary-blue: #0088cc;
+            --primary-teal: #00b4d8;
+            --accent-green: #10b981;
+            --accent-green-glow: rgba(16, 185, 129, 0.2);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border-color: #1e293b;
+            --tag-direct: #ef4444;
+            --nav-height: 65px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding-bottom: calc(var(--nav-height) + 20px);
+            overflow-x: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #0b1325 0%, #15233c 100%);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(135deg, var(--primary-teal), var(--accent-green));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 20px;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .brand-title h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: #fff;
+        }
+
+        .brand-title p {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .offline-badge {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            display: none;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .offline-badge.show { display: flex; }
+
+        .view {
+            display: none;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+
+        .view.active { display: block; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--primary-teal);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+        
+        .form-control, select, input {
+            width: 100%;
+            padding: 14px 16px;
+            background-color: #0b1322;
+            border: 1px solid #1e2d4a;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .btn-swap {
+            background: var(--bg-card-hover);
+            border: 1px solid var(--border-color);
+            color: var(--primary-teal);
+            border-radius: 50%;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: -6px auto 10px auto;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            width: 100%;
+            background: linear-gradient(135deg, #0088cc, #10b981);
+            color: #fff;
+            border: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Live Bus Map in Inicio */
+        #liveMap {
+            height: 280px;
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            z-index: 1;
+        }
+
+        .live-legend {
+            display: flex;
+            gap: 15px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 6px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* Trip Results */
+        .trip-item {
+            background: var(--bg-card);
+            border-left: 4px solid var(--accent-green);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .trip-item.next-up {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, var(--bg-card) 100%);
+            border-left-color: #10b981;
+            box-shadow: 0 0 15px var(--accent-green-glow);
+        }
+
+        .trip-times { display: flex; align-items: center; gap: 15px; }
+        .time-box { text-align: center; }
+        .time-box .time { font-size: 1.4rem; font-weight: 700; color: #fff; }
+        .time-box .label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
+        .trip-arrow { color: var(--primary-teal); font-size: 1.2rem; }
+        .trip-details { text-align: right; }
+
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 700; margin-bottom: 4px; }
+        .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge-blue { background: rgba(0, 180, 216, 0.2); color: #38bdf8; }
+
+        /* Tabs & Tables */
+        .tabs { display: flex; background-color: #0b1322; padding: 4px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-color); }
+        .tab-btn { flex: 1; padding: 10px 6px; background: transparent; border: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; border-radius: 8px; cursor: pointer; text-align: center; }
+        .tab-btn.active { background-color: var(--primary-blue); color: #fff; }
+
+        .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }
+        table.timetable { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: center; }
+        table.timetable th, table.timetable td { padding: 12px 10px; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        table.timetable th { background-color: #16243d; color: var(--primary-teal); }
+        table.timetable td.highlight { color: var(--accent-green); font-weight: bold; }
+        table.timetable td.direct-cell { color: #f87171; font-style: italic; font-size: 0.78rem; }
+
+        #map { height: 320px; width: 100%; border-radius: 16px; margin-top: 15px; border: 1px solid var(--border-color); z-index: 1; }
+
+        .rate-card { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 10px; }
+        .rate-price { font-size: 1.25rem; font-weight: 700; color: var(--accent-green); }
+
+        .info-contact { display: flex; align-items: center; gap: 15px; padding: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 14px; margin-bottom: 20px; text-decoration: none; color: var(--text-main); }
+        .wsp-icon { width: 44px; height: 44px; background: #25d366; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 24px; flex-shrink: 0; }
+
+        nav.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-height); background: #090e17; border-top: 1px solid var(--border-color); display: flex; justify-content: space-around; align-items: center; z-index: 1000; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); text-decoration: none; font-size: 0.7rem; font-weight: 500; width: 20%; height: 100%; background: transparent; border: none; cursor: pointer; }
+        .nav-item svg { width: 22px; height: 22px; margin-bottom: 3px; fill: currentColor; }
+        .nav-item.active { color: var(--primary-teal); }
+
+        .verification-note { font-size: 0.78rem; color: var(--text-muted); background: rgba(255, 255, 255, 0.04); padding: 10px 14px; border-radius: 8px; border-left: 3px solid var(--primary-teal); margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <div class="brand-logo">O</div>
+            <div class="brand-title">
+                <h1>OTERO BUS</h1>
+                <p>Entre Ríos • Transporte de Pasajeros</p>
+            </div>
+        </div>
+        <div id="offlineBadge" class="offline-badge">
+            <span style="width: 8px; height: 8px; background: #f87171; border-radius: 50%; display: inline-block;"></span> Sin conexión
+        </div>
+    </header>
+
+    <!-- VIEW 1: INICIO (Buscador & Mapa en Tiempo Real) -->
+    <main id="view-inicio" class="view active">
+        <!-- Mapa en Vivo de Colectivos -->
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+                Posición Estimada de Colectivos en Vivo
+            </div>
+            <div class="live-legend">
+                <div class="legend-item"><span class="legend-dot" style="background: #00b4d8;"></span> Colón ➔ Liebig (Celeste)</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> Liebig ➔ Colón (Naranja)</div>
+                <div class="legend-item"><span class="legend-dot" style="background: #10b981;"></span> Paradas en cada esquina</div>
+            </div>
+            <div id="liveMap"></div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                Actualización automática según hora estimada de recorrido. (Paran en cada esquina a solicitud).
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                Buscar Próximo Colectivo
+            </div>
+            
+            <div class="form-group">
+                <label>Origen</label>
+                <select id="searchOrigin">
+                    <option value="Colón">Colón (Panadería La Perla / Terminal / Sarmiento)</option>
+                    <option value="San José">San José (Terminal)</option>
+                    <option value="El Brillante">B° El Brillante</option>
+                    <option value="El Colorado">B° El Colorado</option>
+                    <option value="Liebig">Pueblo Liebig</option>
+                </select>
+            </div>
+
+            <button class="btn-swap" id="btnSwap" title="Invertir trayecto">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16"/></svg>
+            </button>
+
+            <div class="form-group">
+                <label>Destino</label>
+                <select id="searchDestination">
+                    <option value="Liebig" selected>Pueblo Liebig</option>
+                    <option value="El Colorado">B° El Colorado</option>
+                    <option value="El Brillante">B° El Brillante</option>
+                    <option value="San José">San José (Terminal)</option>
+                    <option value="Colón">Colón (Terminal / Sarmiento)</option>
+                </select>
+            </div>
+
+            <div style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                    <label>Día de la semana</label>
+                    <select id="searchDayType">
+                        <option value="auto">Hoy (Automático)</option>
+                        <option value="weekday">Lunes a Viernes</option>
+                        <option value="saturday">Sábado / Feriado</option>
+                        <option value="sunday">Domingo</option>
+                    </select>
+                </div>
+                <div class="form-group" style="flex: 1;">
+                    <label>Hora de consulta</label>
+                    <input type="time" id="searchTime">
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btnSearch">Consultar Horarios</button>
+        </div>
+
+        <div id="searchResultsSection">
+            <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+                <span>Servicios Disponibles</span>
+                <span id="searchMetaTag" class="badge badge-blue"></span>
+            </h3>
+            <div id="searchResults"></div>
+        </div>
+    </main>
+
+    <!-- VIEW 2: HORARIOS -->
+    <main id="view-horarios" class="view">
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Tablas Horarias Oficiales
+            </div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" data-day="weekday">Lunes a Viernes</button>
+                <button class="tab-btn" data-day="saturday">Sábados / Feriados</button>
+                <button class="tab-btn" data-day="sunday">Domingos</button>
+            </div>
+
+            <div class="form-group">
+                <label>Sentido del Recorrido</label>
+                <select id="scheduleDirection">
+                    <option value="COLON_LIEBIG">Colón ➔ Pueblo Liebig</option>
+                    <option value="LIEBIG_COLON">Pueblo Liebig ➔ Colón</option>
+                </select>
+            </div>
+
+            <div id="scheduleTableWrapper" class="table-container"></div>
+            
+            <div class="verification-note">
+                <strong>Fuente original:</strong> Horarios verificados según la última actualización oficial de Empresa Otero.
+            </div>
+        </div>
+    </main>
+
+    <!-- VIEW 3: RECORRIDOS -->
+    <main id="view-recorridos" class="view">
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                Recorrido y Paradas (Paran en cada esquina)
+            </div>
+
+            <div class="form-group">
+                <label>Seleccionar Trayecto</label>
+                <select id="mapRouteSelect">
+                    <option value="COLON_LIEBIG">Colón ➔ San José ➔ El Brillante ➔ El Colorado ➔ Liebig (Celeste)</option>
+                    <option value="LIEBIG_COLON">Liebig ➔ El Colorado ➔ El Brillante ➔ San José ➔ Colón (Naranja)</option>
+                </select>
+            </div>
+
+            <div id="map"></div>
+
+            <div style="margin-top: 20px;">
+                <h4 style="font-size: 0.95rem; margin-bottom: 10px; color: var(--primary-teal);">Paradas y Puntos Clave:</h4>
+                <div id="stopsList"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- VIEW 4: TARIFAS -->
+    <main id="view-tarifas" class="view">
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                Cuadro Tarifario Vigente
+            </div>
+
+            <div class="rate-card">
+                <div>
+                    <strong>Colón ➔ San José / El Brillante / El Colorado / Liebig</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Boleto Común General</div>
+                </div>
+                <div class="rate-price">$2.500</div>
+            </div>
+
+            <div class="rate-card">
+                <div>
+                    <strong>San José ➔ El Brillante / El Colorado / Liebig</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Tramo Interurbano Corto</div>
+                </div>
+                <div class="rate-price">$2.000</div>
+            </div>
+
+            <div class="rate-card">
+                <div>
+                    <strong>Tarifa Estudiantil / Escolar</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Presentando credencial estudiantil</div>
+                </div>
+                <div class="rate-price">$1.500</div>
+            </div>
+
+            <div class="rate-card" style="border-left: 4px solid var(--primary-teal);">
+                <div>
+                    <strong>Personas con Discapacidad (PCD)</strong>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Con Certificado Único (CUD) y DNI</div>
+                </div>
+                <div class="rate-price" style="color: var(--primary-teal);">SIN CARGO</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- VIEW 5: INFORMACIÓN -->
+    <main id="view-informacion" class="view">
+        <div class="card">
+            <div class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Contacto Oficial
+            </div>
+
+            <a href="https://wa.me/5493447574252" target="_blank" class="info-contact">
+                <div class="wsp-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z"/></svg>
+                </div>
+                <div>
+                    <strong style="font-size: 1.05rem; display: block; color: #fff;">Atención WhatsApp</strong>
+                    <span style="font-size: 0.85rem; color: var(--text-muted);">+54 9 3447 57-4252</span>
+                </div>
+            </a>
+
+            <div style="background: rgba(255,255,255,0.03); padding: 14px; border-radius: 10px; border-left: 3px solid var(--primary-teal); font-size: 0.85rem;">
+                <strong>Nota importante:</strong> Los colectivos paran en cada esquina a lo largo del trayecto. Los domingos no hay servicio.
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" data-view="inicio">
+            <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+            <span>Inicio</span>
+        </button>
+        <button class="nav-item" data-view="horarios">
+            <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47
